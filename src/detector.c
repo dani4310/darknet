@@ -12,6 +12,8 @@
 #endif
 static int coco_ids[] = {1,2,3,4,5,6,7,8,9,10,11,13,14,15,16,17,18,19,20,21,22,23,24,25,27,28,31,32,33,34,35,36,37,38,39,40,41,42,43,44,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,67,70,72,73,74,75,76,77,78,79,80,81,82,84,85,86,87,88,89,90};
 
+FILE *result_file = NULL;
+
 void train_detector(char *datacfg, char *cfgfile, char *weightfile, int *gpus, int ngpus, int clear)
 {
     list *options = read_data_cfg(datacfg);
@@ -437,7 +439,25 @@ void validate_detector_recall(char *cfgfile, char *weightfile)
         free_image(sized);
     }
 }
-
+void write_result(char *image_name, image im, int num, box *boxes, float **probs, char **names, int classes){
+    int i;
+    if(result_file){
+        for(i = 0; i < num; ++i){
+            int class = max_index(probs[i], classes);
+            float prob = probs[i][class];
+            box b = boxes[i];
+            int left  = (b.x-b.w/2.)*im.w;
+            int right = (b.x+b.w/2.)*im.w;
+            int top   = (b.y-b.h/2.)*im.h;
+            int bot   = (b.y+b.h/2.)*im.h;
+            if(left < 0) left = 0;
+            if(right > im.w-1) right = im.w-1;
+            if(top < 0) top = 0;
+            if(bot > im.h-1) bot = im.h-1;
+            fprintf(result_file, "%s %s %d %d %d %d %f\n", image_name, names[class], left, top, right-left, bot-top, prob);
+        }
+    }
+}
 void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filename, float thresh, float hier_thresh)
 {
     list *options = read_data_cfg(datacfg);
@@ -456,8 +476,17 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
     char *input = buff;
     int j;
     float nms=.4;
+    FILE *img_lst = NULL;
+    if(!strcmp(&filename[strlen((const char *)filename)-3],"txt")){
+        img_lst = fopen(filename, "r");
+
+    }
     while(1){
-        if(filename){
+        if(img_lst){
+            if(!fgets(buff, sizeof(buff), img_lst))
+                break;
+            buff[strlen(buff)-1] = '\0';
+        } else if(filename){
             strncpy(input, filename, 256);
         } else {
             printf("Enter Image Path: ");
@@ -481,19 +510,17 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         get_region_boxes(l, 1, 1, thresh, probs, boxes, 0, 0, hier_thresh);
         if (l.softmax_tree && nms) do_nms_obj(boxes, probs, l.w*l.h*l.n, l.classes, nms);
         else if (nms) do_nms_sort(boxes, probs, l.w*l.h*l.n, l.classes, nms);
-        draw_detections(im, l.w*l.h*l.n, thresh, boxes, probs, names, alphabet, l.classes);
-        save_image(im, "predictions");
-        show_image(im, "predictions");
+        write_result(input, im, l.w*l.h*l.n, boxes, probs, names, l.classes);
+        // draw_detections(im, l.w*l.h*l.n, thresh, boxes, probs, names, alphabet, l.classes);
+        // show_image(im, "predictions");
 
         free_image(im);
         free_image(sized);
         free(boxes);
         free_ptrs((void **)probs, l.w*l.h*l.n);
-#ifdef OPENCV
-        cvWaitKey(0);
-        cvDestroyAllWindows();
-#endif
-        if (filename) break;
+// #ifdef OPENCV
+//         cvWaitKey(0);
+// #endif
     }
 }
 
@@ -502,6 +529,12 @@ void run_detector(int argc, char **argv)
     char *prefix = find_char_arg(argc, argv, "-prefix", 0);
     float thresh = find_float_arg(argc, argv, "-thresh", .24);
     float hier_thresh = find_float_arg(argc, argv, "-hier", .5);
+    char *result_file_name = find_char_arg(argc, argv, "-result_file", 0);
+    if(result_file_name){
+        result_file = fopen(result_file_name, "w");
+        if(!result_file)
+            fprintf(stderr, "Error : Cannot open file '%s'\n", result_file_name);
+    }
     int cam_index = find_int_arg(argc, argv, "-c", 0);
     int frame_skip = find_int_arg(argc, argv, "-s", 0);
     if(argc < 4){
