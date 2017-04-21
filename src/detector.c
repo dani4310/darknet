@@ -439,22 +439,24 @@ void validate_detector_recall(char *cfgfile, char *weightfile)
         free_image(sized);
     }
 }
-void write_result(char *image_name, image im, int num, box *boxes, float **probs, char **names, int classes){
+void write_result(char *image_name, image im, int num, float thresh, box *boxes, float **probs, char **names, int classes){
     int i;
     if(result_file){
         for(i = 0; i < num; ++i){
             int class = max_index(probs[i], classes);
             float prob = probs[i][class];
-            box b = boxes[i];
-            int left  = (b.x-b.w/2.)*im.w;
-            int right = (b.x+b.w/2.)*im.w;
-            int top   = (b.y-b.h/2.)*im.h;
-            int bot   = (b.y+b.h/2.)*im.h;
-            if(left < 0) left = 0;
-            if(right > im.w-1) right = im.w-1;
-            if(top < 0) top = 0;
-            if(bot > im.h-1) bot = im.h-1;
-            fprintf(result_file, "%s %s %d %d %d %d %f\n", image_name, names[class], left, top, right-left, bot-top, prob);
+            if(prob > thresh){
+                box b = boxes[i];
+                int left  = (b.x-b.w/2.)*im.w;
+                int right = (b.x+b.w/2.)*im.w;
+                int top   = (b.y-b.h/2.)*im.h;
+                int bot   = (b.y+b.h/2.)*im.h;
+                if(left < 0) left = 0;
+                if(right > im.w-1) right = im.w-1;
+                if(top < 0) top = 0;
+                if(bot > im.h-1) bot = im.h-1;
+                fprintf(result_file, "%s %s %d %d %d %d %f\n", image_name, names[class], left, top, right-left, bot-top, prob);
+            }
         }
     }
 }
@@ -510,7 +512,7 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
         get_region_boxes(l, 1, 1, thresh, probs, boxes, 0, 0, hier_thresh);
         if (l.softmax_tree && nms) do_nms_obj(boxes, probs, l.w*l.h*l.n, l.classes, nms);
         else if (nms) do_nms_sort(boxes, probs, l.w*l.h*l.n, l.classes, nms);
-        write_result(input, im, l.w*l.h*l.n, boxes, probs, names, l.classes);
+        write_result(input, im, l.w*l.h*l.n, thresh, boxes, probs, names, l.classes);
         // draw_detections(im, l.w*l.h*l.n, thresh, boxes, probs, names, alphabet, l.classes);
         // show_image(im, "predictions");
 
