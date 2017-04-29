@@ -529,7 +529,7 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
 void run_detector(int argc, char **argv)
 {
     char *prefix = find_char_arg(argc, argv, "-prefix", 0);
-    float thresh = find_float_arg(argc, argv, "-thresh", .24);
+    float thresh = find_float_arg(argc, argv, "-thresh", .0);
     float hier_thresh = find_float_arg(argc, argv, "-hier", .5);
     char *result_file_name = find_char_arg(argc, argv, "-result_file", 0);
     if(result_file_name){
